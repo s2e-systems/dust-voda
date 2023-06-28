@@ -1,0 +1,20 @@
+[package]
+name = "dust-voda"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "publisher"
+path = "src/main_publisher.rs"
+
+[[bin]]
+name = "subscriber"
+path = "src/main_subscriber.rs"
+
+[dependencies]
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+cdr = "0.2"
+dust_dds = "0.2"
+dust_dds_derive = "0.2"
+gstreamer = "0.19.2"
+gstreamer-app = "0.19.2"

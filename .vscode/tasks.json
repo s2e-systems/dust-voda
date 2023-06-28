@@ -1,0 +1,28 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": ["--bin",  "subscriber"],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "Cargo run subscriber"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": ["--bin",  "publisher"],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "Cargo run publisher"
+		},
+		{
+			"label": "Run Subscriber and Publisher",
+			"dependsOn": ["Cargo run subscriber", "Cargo run publisher"],
+			"group": "test"
+		}
+	]
+}
