@@ -1,29 +1,14 @@
 use dust_dds::{
-    infrastructure::{
-        qos::DataReaderQos,
-        qos_policy::{ReliabilityQosPolicy, ReliabilityQosPolicyKind},
-        time::{Duration, DurationKind},
-    },
+    domain::domain_participant_factory::DomainParticipantFactory,
+    infrastructure::status::StatusKind,
+    infrastructure::{qos::QosKind, status::NO_STATUS},
     subscription::data_reader_listener::DataReaderListener,
+    subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
 };
 use gstreamer::prelude::*;
 
-use dust_dds::{
-    domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::{qos::QosKind, status::NO_STATUS},
-    subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
-    topic_definition::type_support::{DdsSerde, DdsType},
-};
+include!("../build/idl/video_dds.rs");
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Serialize, DdsType, DdsSerde, Debug)]
-struct Video {
-    #[key]
-    userid: i16,
-    frameNum: i32,
-    frame: Vec<u8>,
-}
 struct Listener {
     appsrc: gstreamer_app::AppSrc,
 }
@@ -35,14 +20,12 @@ impl DataReaderListener for Listener {
         &mut self,
         the_reader: &dust_dds::subscription::data_reader::DataReader<Self::Foo>,
     ) {
-        println!("on data available");
         if let Ok(samples) =
             the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
         {
             for sample in samples {
                 let sample_data = sample.data.as_ref().unwrap();
-                println!("sample received: {:?}", sample_data.frameNum);
-
+                println!("sample received: {:?}", sample_data.frame_num);
 
                 let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len()).unwrap();
                 {
@@ -76,17 +59,10 @@ fn main() {
     let subscriber = participant
         .create_subscriber(QosKind::Default, None, NO_STATUS)
         .unwrap();
-    let reader_qos = DataReaderQos {
-        reliability: ReliabilityQosPolicy {
-            kind: ReliabilityQosPolicyKind::Reliable,
-            max_blocking_time: DurationKind::Infinite,
-        },
-        ..Default::default()
-    };
 
-    let pipeline = gstreamer::parse_launch(&format!(
-        "appsrc name=appsrc ! video/x-raw,format=I420,width=160,height=90,framerate=10/1 ! autovideosink"
-    ))
+    let pipeline = gstreamer::parse_launch(
+        "appsrc name=appsrc ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! videoconvert ! taginject tags=\"title=Subscriber\" ! autovideosink"
+    )
     .unwrap();
 
     // Start playing
@@ -96,16 +72,14 @@ fn main() {
 
     let bin = pipeline.downcast_ref::<gstreamer::Bin>().unwrap();
     let appsrc_element = bin.by_name("appsrc").unwrap();
-    let appsrc = appsrc_element
-        .downcast::<gstreamer_app::AppSrc>()
-        .unwrap();
+    let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().unwrap();
 
     let _reader = subscriber
         .create_datareader(
             &topic,
             QosKind::Default,
             Some(Box::new(Listener { appsrc })),
-            NO_STATUS,
+            &[StatusKind::DataAvailable],
         )
         .unwrap();
 

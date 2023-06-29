@@ -1,24 +1,13 @@
+use dust_dds::{
+    domain::domain_participant_factory::DomainParticipantFactory,
+    infrastructure::{qos::QosKind, status::NO_STATUS},
+};
 use gstreamer::prelude::*;
+
+include!("../build/idl/video_dds.rs");
 
 fn main() {
     gstreamer::init().unwrap();
-
-
-    use dust_dds::{
-        domain::domain_participant_factory::DomainParticipantFactory,
-        infrastructure::{qos::QosKind, status::NO_STATUS},
-        topic_definition::type_support::{DdsSerde, DdsType},
-    };
-
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Deserialize, Serialize, DdsType, DdsSerde)]
-    struct Video {
-        #[key]
-        userid: i16,
-        frameNum: i32,
-        frame: Vec<u8>,
-    }
 
     let domain_id = 0;
     let participant_factory = DomainParticipantFactory::get_instance();
@@ -39,10 +28,9 @@ fn main() {
         .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
-
-    let pipeline = gstreamer::parse_launch(&format!(
-        "videotestsrc horizontal-speed=1 ! video/x-raw,format=I420,width=160,height=90,framerate=10/1 ! appsink name=appsink"
-    ))
+    let pipeline = gstreamer::parse_launch(
+        "videotestsrc horizontal-speed=1 ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! tee name=t ! queue ! appsink name=appsink  t. ! queue ! videoconvert ! taginject tags=\"title=Publisher\" ! autovideosink"
+    )
     .unwrap();
 
     // Start playing
@@ -65,12 +53,12 @@ fn main() {
                     let bytes = b.as_slice();
 
                     let video_sample = Video {
-                        userid: 8,
-                        frameNum: i,
+                        user_id: 8,
+                        frame_num: i,
                         frame: bytes.to_vec(),
                     };
                     writer.write(&video_sample, None).unwrap();
-                    i = i + 1;
+                    i += 1;
                     println!("Wrote sample {:?}", i);
 
                     use std::io::{self, Write};
@@ -81,7 +69,6 @@ fn main() {
             })
             .build(),
     );
-
 
     // Wait until error or EOS
     let bus = pipeline.bus().unwrap();

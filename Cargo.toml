@@ -14,7 +14,9 @@ path = "src/main_subscriber.rs"
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 cdr = "0.2"
-dust_dds = "0.2"
-dust_dds_derive = "0.2"
+dust_dds = "0.3"
 gstreamer = "0.19.2"
 gstreamer-app = "0.19.2"
+
+[build-dependencies]
+dust_dds_gen = {version = "0.3" }
