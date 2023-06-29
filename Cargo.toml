@@ -17,3 +17,6 @@ cdr = "0.2"
 dust_dds = "0.3"
 gstreamer = "0.19.2"
 gstreamer-app = "0.19.2"
+
+[build-dependencies]
+dust_dds_gen = {version = "0.3" }

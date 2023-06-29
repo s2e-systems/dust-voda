@@ -1,23 +1,13 @@
+use dust_dds::{
+    domain::domain_participant_factory::DomainParticipantFactory,
+    infrastructure::{qos::QosKind, status::NO_STATUS},
+};
 use gstreamer::prelude::*;
+
+include!("../build/idl/video_dds.rs");
 
 fn main() {
     gstreamer::init().unwrap();
-
-    use dust_dds::{
-        domain::domain_participant_factory::DomainParticipantFactory,
-        infrastructure::{qos::QosKind, status::NO_STATUS},
-        topic_definition::type_support::DdsType,
-    };
-
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Deserialize, Serialize, DdsType)]
-    struct Video {
-        #[key]
-        userid: i16,
-        frameNum: i32,
-        frame: Vec<u8>,
-    }
 
     let domain_id = 0;
     let participant_factory = DomainParticipantFactory::get_instance();
@@ -63,8 +53,8 @@ fn main() {
                     let bytes = b.as_slice();
 
                     let video_sample = Video {
-                        userid: 8,
-                        frameNum: i,
+                        user_id: 8,
+                        frame_num: i,
                         frame: bytes.to_vec(),
                     };
                     writer.write(&video_sample, None).unwrap();

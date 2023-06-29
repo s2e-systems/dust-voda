@@ -1,29 +1,19 @@
 use dust_dds::{
+    domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::{
         qos::DataReaderQos,
         qos_policy::{ReliabilityQosPolicy, ReliabilityQosPolicyKind},
-        time::{Duration, DurationKind}, status::StatusKind,
+        status::StatusKind,
+        time::DurationKind,
     },
+    infrastructure::{qos::QosKind, status::NO_STATUS},
     subscription::data_reader_listener::DataReaderListener,
+    subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
 };
 use gstreamer::prelude::*;
 
-use dust_dds::{
-    domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::{qos::QosKind, status::NO_STATUS},
-    subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
-    topic_definition::type_support::DdsType,
-};
+include!("../build/idl/video_dds.rs");
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Serialize, DdsType, Debug)]
-struct Video {
-    #[key]
-    userid: i16,
-    frameNum: i32,
-    frame: Vec<u8>,
-}
 struct Listener {
     appsrc: gstreamer_app::AppSrc,
 }
@@ -41,7 +31,7 @@ impl DataReaderListener for Listener {
         {
             for sample in samples {
                 let sample_data = sample.data.as_ref().unwrap();
-                println!("sample received: {:?}", sample_data.frameNum);
+                println!("sample received: {:?}", sample_data.frame_num);
 
                 let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len()).unwrap();
                 {
