@@ -8,6 +8,9 @@
 			"problemMatcher": [
 				"$rustc"
 			],
+			"env": {
+				"DUST_DDS_CONFIGURATION" : "{\"interface_name\":\"Wi-Fi\"}"
+			},
 			"label": "Cargo run subscriber"
 		},
 		{
@@ -17,6 +20,9 @@
 			"problemMatcher": [
 				"$rustc"
 			],
+			"env": {
+				"DUST_DDS_CONFIGURATION" : "{\"interface_name\":\"Wi-Fi\", \"fragment_size\":15000}"
+			},
 			"label": "Cargo run publisher"
 		},
 		{

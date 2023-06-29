@@ -3,16 +3,15 @@ use gstreamer::prelude::*;
 fn main() {
     gstreamer::init().unwrap();
 
-
     use dust_dds::{
         domain::domain_participant_factory::DomainParticipantFactory,
         infrastructure::{qos::QosKind, status::NO_STATUS},
-        topic_definition::type_support::{DdsSerde, DdsType},
+        topic_definition::type_support::DdsType,
     };
 
     use serde::{Deserialize, Serialize};
 
-    #[derive(Deserialize, Serialize, DdsType, DdsSerde)]
+    #[derive(Deserialize, Serialize, DdsType)]
     struct Video {
         #[key]
         userid: i16,
@@ -39,9 +38,8 @@ fn main() {
         .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
-
     let pipeline = gstreamer::parse_launch(&format!(
-        "videotestsrc horizontal-speed=1 ! video/x-raw,format=I420,width=160,height=90,framerate=10/1 ! appsink name=appsink"
+        "videotestsrc horizontal-speed=1 ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! appsink name=appsink"
     ))
     .unwrap();
 
@@ -81,7 +79,6 @@ fn main() {
             })
             .build(),
     );
-
 
     // Wait until error or EOS
     let bus = pipeline.bus().unwrap();
