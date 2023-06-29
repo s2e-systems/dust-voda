@@ -28,9 +28,9 @@ fn main() {
         .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
-    let pipeline = gstreamer::parse_launch(&format!(
-        "videotestsrc horizontal-speed=1 ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! appsink name=appsink"
-    ))
+    let pipeline = gstreamer::parse_launch(
+        "videotestsrc horizontal-speed=1 ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! tee name=t ! queue ! appsink name=appsink  t. ! queue ! videoconvert ! taginject tags=\"title=Publisher\" ! autovideosink"
+    )
     .unwrap();
 
     // Start playing
@@ -58,7 +58,7 @@ fn main() {
                         frame: bytes.to_vec(),
                     };
                     writer.write(&video_sample, None).unwrap();
-                    i = i + 1;
+                    i += 1;
                     println!("Wrote sample {:?}", i);
 
                     use std::io::{self, Write};

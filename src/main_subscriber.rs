@@ -1,11 +1,6 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::{
-        qos::DataReaderQos,
-        qos_policy::{ReliabilityQosPolicy, ReliabilityQosPolicyKind},
-        status::StatusKind,
-        time::DurationKind,
-    },
+    infrastructure::status::StatusKind,
     infrastructure::{qos::QosKind, status::NO_STATUS},
     subscription::data_reader_listener::DataReaderListener,
     subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
@@ -25,7 +20,6 @@ impl DataReaderListener for Listener {
         &mut self,
         the_reader: &dust_dds::subscription::data_reader::DataReader<Self::Foo>,
     ) {
-        println!("on data available");
         if let Ok(samples) =
             the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
         {
@@ -65,17 +59,10 @@ fn main() {
     let subscriber = participant
         .create_subscriber(QosKind::Default, None, NO_STATUS)
         .unwrap();
-    let reader_qos = DataReaderQos {
-        reliability: ReliabilityQosPolicy {
-            kind: ReliabilityQosPolicyKind::Reliable,
-            max_blocking_time: DurationKind::Infinite,
-        },
-        ..Default::default()
-    };
 
-    let pipeline = gstreamer::parse_launch(&format!(
-        "appsrc name=appsrc ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! videoconvert ! autovideosink"
-    ))
+    let pipeline = gstreamer::parse_launch(
+        "appsrc name=appsrc ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! videoconvert ! taginject tags=\"title=Subscriber\" ! autovideosink"
+    )
     .unwrap();
 
     // Start playing
