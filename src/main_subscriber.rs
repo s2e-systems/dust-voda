@@ -1,7 +1,7 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::status::StatusKind,
-    infrastructure::{qos::QosKind, status::NO_STATUS},
+    infrastructure::{listeners::NoOpListener, qos::QosKind, status::NO_STATUS},
     subscription::data_reader_listener::DataReaderListener,
     subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
 };
@@ -24,19 +24,20 @@ impl DataReaderListener for Listener {
             the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
         {
             for sample in samples {
-                let sample_data = sample.data.as_ref().unwrap();
-                println!("sample received: {:?}", sample_data.frame_num);
+                if let Ok(sample_data) = sample.data() {
+                    println!("sample received: {:?}", sample_data.frame_num);
 
-                let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len()).unwrap();
-                {
-                    let buffer_ref = buffer.get_mut().unwrap();
-                    let mut buffer_samples = buffer_ref.map_writable().unwrap();
-                    buffer_samples.clone_from_slice(sample_data.frame.as_slice());
+                    let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len()).unwrap();
+                    {
+                        let buffer_ref = buffer.get_mut().unwrap();
+                        let mut buffer_samples = buffer_ref.map_writable().unwrap();
+                        buffer_samples.clone_from_slice(sample_data.frame.as_slice());
+                    }
+                    self.appsrc.push_buffer(buffer).unwrap();
+
+                    use std::io::{self, Write};
+                    let _ = io::stdout().flush();
                 }
-                self.appsrc.push_buffer(buffer).unwrap();
-
-                use std::io::{self, Write};
-                let _ = io::stdout().flush();
             }
         }
     }
@@ -49,15 +50,21 @@ fn main() {
     let participant_factory = DomainParticipantFactory::get_instance();
 
     let participant = participant_factory
-        .create_participant(domain_id, QosKind::Default, None, NO_STATUS)
+        .create_participant(domain_id, QosKind::Default, NoOpListener::new(), NO_STATUS)
         .unwrap();
 
     let topic = participant
-        .create_topic::<Video>("VideoStream", QosKind::Default, None, NO_STATUS)
+        .create_topic(
+            "VideoStream",
+            "VideoStream",
+            QosKind::Default,
+            NoOpListener::new(),
+            NO_STATUS,
+        )
         .unwrap();
 
     let subscriber = participant
-        .create_subscriber(QosKind::Default, None, NO_STATUS)
+        .create_subscriber(QosKind::Default, NoOpListener::new(), NO_STATUS)
         .unwrap();
 
     let pipeline = gstreamer::parse_launch(
@@ -78,7 +85,7 @@ fn main() {
         .create_datareader(
             &topic,
             QosKind::Default,
-            Some(Box::new(Listener { appsrc })),
+            Listener { appsrc },
             &[StatusKind::DataAvailable],
         )
         .unwrap();
