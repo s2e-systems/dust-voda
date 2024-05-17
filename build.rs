@@ -1,7 +1,7 @@
 use std::{fs::{File, self}, io::Write, path::Path};
 
 fn main() {
-    let build_path = Path::new("./build/idl/");
+    let build_path = Path::new("./target/idl/");
     fs::create_dir_all(build_path).expect("Creating build path failed");
 
     let idl_path = Path::new("src/VideoDDS.idl");

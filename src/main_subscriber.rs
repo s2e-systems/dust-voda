@@ -1,13 +1,46 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::status::StatusKind,
-    infrastructure::{listeners::NoOpListener, qos::QosKind, status::NO_STATUS},
-    subscription::data_reader_listener::DataReaderListener,
-    subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
+    infrastructure::{
+        error::DdsError,
+        qos::QosKind,
+        status::{StatusKind, NO_STATUS},
+    },
+    subscription::{
+        data_reader_listener::DataReaderListener,
+        sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
+    },
 };
 use gstreamer::prelude::*;
 
-include!("../build/idl/video_dds.rs");
+include!("../target/idl/video_dds.rs");
+
+#[derive(Debug)]
+struct Error(String);
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl From<gstreamer::glib::Error> for Error {
+    fn from(value: gstreamer::glib::Error) -> Self {
+        Self(format!("GStreamer error: {}", value))
+    }
+}
+impl From<gstreamer::StateChangeError> for Error {
+    fn from(value: gstreamer::StateChangeError) -> Self {
+        Self(format!("GStreamer state change error: {}", value))
+    }
+}
+impl From<&gstreamer::message::Error> for Error {
+    fn from(value: &gstreamer::message::Error) -> Self {
+        Self(format!("GStreamer state change error: {:?}", value))
+    }
+}
+impl From<DdsError> for Error {
+    fn from(value: DdsError) -> Self {
+        Self(format!("DDS error: {:?}", value))
+    }
+}
 
 struct Listener {
     appsrc: gstreamer_app::AppSrc,
@@ -18,7 +51,7 @@ impl DataReaderListener for Listener {
 
     fn on_data_available(
         &mut self,
-        the_reader: &dust_dds::subscription::data_reader::DataReader<Self::Foo>,
+        the_reader: dust_dds::subscription::data_reader::DataReader<Self::Foo>,
     ) {
         if let Ok(samples) =
             the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
@@ -27,91 +60,76 @@ impl DataReaderListener for Listener {
                 if let Ok(sample_data) = sample.data() {
                     println!("sample received: {:?}", sample_data.frame_num);
 
-                    let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len()).unwrap();
+                    let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len())
+                        .expect("buffer creation failed");
                     {
-                        let buffer_ref = buffer.get_mut().unwrap();
-                        let mut buffer_samples = buffer_ref.map_writable().unwrap();
+                        let buffer_ref = buffer.get_mut().expect("Buffer not writable");
+                        let mut buffer_samples =
+                            buffer_ref.map_writable().expect("Buffer not mappable");
                         buffer_samples.clone_from_slice(sample_data.frame.as_slice());
                     }
-                    self.appsrc.push_buffer(buffer).unwrap();
+                    self.appsrc
+                        .push_buffer(buffer)
+                        .expect("Failed pushing buffer into appsrc");
 
                     use std::io::{self, Write};
-                    let _ = io::stdout().flush();
+                    io::stdout().flush().ok();
                 }
             }
         }
     }
 }
 
-fn main() {
-    gstreamer::init().unwrap();
+fn main() -> Result<(), Error> {
+    gstreamer::init()?;
 
     let domain_id = 0;
     let participant_factory = DomainParticipantFactory::get_instance();
-
-    let participant = participant_factory
-        .create_participant(domain_id, QosKind::Default, NoOpListener::new(), NO_STATUS)
-        .unwrap();
-
-    let topic = participant
-        .create_topic(
-            "VideoStream",
-            "VideoStream",
-            QosKind::Default,
-            NoOpListener::new(),
-            NO_STATUS,
-        )
-        .unwrap();
-
-    let subscriber = participant
-        .create_subscriber(QosKind::Default, NoOpListener::new(), NO_STATUS)
-        .unwrap();
+    let participant =
+        participant_factory.create_participant(domain_id, QosKind::Default, None, NO_STATUS)?;
+    let topic = participant.create_topic::<Video>(
+        "VideoStream",
+        "VideoStream",
+        QosKind::Default,
+        None,
+        NO_STATUS,
+    )?;
+    let subscriber = participant.create_subscriber(QosKind::Default, None, NO_STATUS)?;
 
     let pipeline = gstreamer::parse_launch(
-        "appsrc name=appsrc ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! videoconvert ! taginject tags=\"title=Subscriber\" ! autovideosink"
-    )
-    .unwrap();
+        r#"appsrc name=appsrc ! openh264dec ! videoconvert ! taginject tags="title=Subscriber" ! autovideosink"#,
+    )?;
 
-    // Start playing
-    pipeline
-        .set_state(gstreamer::State::Playing)
-        .expect("Unable to set the pipeline to the `Playing` state");
+    pipeline.set_state(gstreamer::State::Playing)?;
 
-    let bin = pipeline.downcast_ref::<gstreamer::Bin>().unwrap();
-    let appsrc_element = bin.by_name("appsrc").unwrap();
-    let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().unwrap();
+    let bin = pipeline.downcast_ref::<gstreamer::Bin>().expect("Pipeline must be bin");
+    let appsrc_element = bin.by_name("appsrc").expect("Pipeline must have appsrc");
+    let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().expect("appsrc must be an AppSrc");
+    let src_caps = gstreamer::Caps::builder("video/x-h264")
+        .field("stream-format", "byte-stream")
+        .field("alignment", "au")
+        .field("profile", "constrained-baseline")
+        .build();
+    appsrc.set_caps(Some(&src_caps));
 
-    let _reader = subscriber
-        .create_datareader(
-            &topic,
-            QosKind::Default,
-            Listener { appsrc },
-            &[StatusKind::DataAvailable],
-        )
-        .unwrap();
+    let _reader = subscriber.create_datareader(
+        &topic,
+        QosKind::Default,
+        Some(Box::new(Listener { appsrc })),
+        &[StatusKind::DataAvailable],
+    )?;
 
     // Wait until error or EOS
-    let bus = pipeline.bus().unwrap();
+    let bus = pipeline.bus().expect("Pipeline must have bus");
     for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
-        use gstreamer::MessageView;
-
         match msg.view() {
-            MessageView::Eos(..) => break,
-            MessageView::Error(err) => {
-                println!(
-                    "Error from {:?}: {} ({:?})",
-                    err.src().map(|s| s.path_string()),
-                    err.error(),
-                    err.debug()
-                );
-                break;
-            }
+            gstreamer::MessageView::Eos(..) => break,
+            gstreamer::MessageView::Error(err) => Err(err)?,
             _ => (),
         }
     }
 
-    // Shutdown pipeline
-    pipeline
-        .set_state(gstreamer::State::Null)
-        .expect("Unable to set the pipeline to the `Null` state");
+    pipeline.set_state(gstreamer::State::Null)?;
+
+    Ok(())
 }
