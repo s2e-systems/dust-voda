@@ -1,13 +1,13 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::status::StatusKind,
-    infrastructure::{listeners::NoOpListener, qos::QosKind, status::NO_STATUS},
+    infrastructure::{qos::QosKind, status::NO_STATUS},
     subscription::data_reader_listener::DataReaderListener,
     subscription::sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
 };
 use gstreamer::prelude::*;
 
-include!("../build/idl/video_dds.rs");
+include!("../target/idl/video_dds.rs");
 
 struct Listener {
     appsrc: gstreamer_app::AppSrc,
@@ -18,7 +18,7 @@ impl DataReaderListener for Listener {
 
     fn on_data_available(
         &mut self,
-        the_reader: &dust_dds::subscription::data_reader::DataReader<Self::Foo>,
+        the_reader: dust_dds::subscription::data_reader::DataReader<Self::Foo>,
     ) {
         if let Ok(samples) =
             the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
@@ -50,25 +50,25 @@ fn main() {
     let participant_factory = DomainParticipantFactory::get_instance();
 
     let participant = participant_factory
-        .create_participant(domain_id, QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_participant(domain_id, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
     let topic = participant
-        .create_topic(
+        .create_topic::<Video>(
             "VideoStream",
             "VideoStream",
             QosKind::Default,
-            NoOpListener::new(),
+            None,
             NO_STATUS,
         )
         .unwrap();
 
     let subscriber = participant
-        .create_subscriber(QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_subscriber(QosKind::Default, None, NO_STATUS)
         .unwrap();
 
     let pipeline = gstreamer::parse_launch(
-        "appsrc name=appsrc ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! videoconvert ! taginject tags=\"title=Subscriber\" ! autovideosink"
+        r#"appsrc name=appsrc ! openh264dec ! videoconvert ! taginject tags="title=Subscriber" ! autovideosink"#
     )
     .unwrap();
 
@@ -80,12 +80,18 @@ fn main() {
     let bin = pipeline.downcast_ref::<gstreamer::Bin>().unwrap();
     let appsrc_element = bin.by_name("appsrc").unwrap();
     let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().unwrap();
+    let src_caps = gstreamer::Caps::builder("video/x-h264")
+        .field("stream-format", "byte-stream")
+        .field("alignment", "au")
+        .field("profile", "constrained-baseline")
+        .build();
+    appsrc.set_caps(Some(&src_caps));
 
     let _reader = subscriber
         .create_datareader(
             &topic,
             QosKind::Default,
-            Listener { appsrc },
+            Some(Box::new(Listener { appsrc })),
             &[StatusKind::DataAvailable],
         )
         .unwrap();

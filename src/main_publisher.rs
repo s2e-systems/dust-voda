@@ -1,35 +1,50 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::{qos::QosKind, status::NO_STATUS, listeners::NoOpListener},
+    infrastructure::{qos::QosKind, status::NO_STATUS},
 };
 use gstreamer::prelude::*;
 
-include!("../build/idl/video_dds.rs");
+include!("../target/idl/video_dds.rs");
 
-fn main() {
-    gstreamer::init().unwrap();
+fn main() -> Result<(), gstreamer::glib::Error> {
+    gstreamer::init()?;
 
     let domain_id = 0;
     let participant_factory = DomainParticipantFactory::get_instance();
-
+    participant_factory
+        .set_configuration(
+            dust_dds::configuration::DustDdsConfigurationBuilder::new()
+                .fragment_size(60000)
+                .udp_receive_buffer_size(Some(60000 * 46))
+                .interface_name(Some("Wi-Fi".to_string()))
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
     let participant = participant_factory
-        .create_participant(domain_id, QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_participant(domain_id, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
     let topic = participant
-        .create_topic("VideoStream", "VideoStream", QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_topic::<Video>(
+            "VideoStream",
+            "VideoStream",
+            QosKind::Default,
+            None,
+            NO_STATUS,
+        )
         .unwrap();
 
     let publisher = participant
-        .create_publisher(QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_publisher(QosKind::Default, None, NO_STATUS)
         .unwrap();
 
     let writer = publisher
-        .create_datawriter(&topic, QosKind::Default, NoOpListener::new(), NO_STATUS)
+        .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)
         .unwrap();
 
     let pipeline = gstreamer::parse_launch(
-        "videotestsrc horizontal-speed=1 ! video/x-raw,format=RGB,width=160,height=90,framerate=10/1 ! tee name=t ! queue ! appsink name=appsink  t. ! queue ! videoconvert ! taginject tags=\"title=Publisher\" ! autovideosink"
+        r#"autovideosrc ! video/x-raw,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink  t. ! queue leaky=2 ! taginject tags="title=Publisher" ! autovideosink"#
     )
     .unwrap();
 
@@ -58,11 +73,12 @@ fn main() {
                         frame: bytes.to_vec(),
                     };
                     writer.write(&video_sample, None).unwrap();
+
                     i += 1;
                     println!("Wrote sample {:?}", i);
 
                     use std::io::{self, Write};
-                    let _ = io::stdout().flush();
+                    io::stdout().flush().ok();
                 }
 
                 Ok(gstreamer::FlowSuccess::Ok)
@@ -94,4 +110,6 @@ fn main() {
     pipeline
         .set_state(gstreamer::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
+
+    Ok(())
 }
