@@ -1,7 +1,7 @@
 version: 2.1
 
 jobs:
-  build:
+  build_and_clippy:
     docker:
       - image: cimg/rust:1.75.0
     steps:
@@ -23,4 +23,4 @@ jobs:
 workflows:
   build:
     jobs:
-      - build
+      - build_and_clippy

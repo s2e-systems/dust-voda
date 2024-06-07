@@ -12,7 +12,7 @@ use dust_dds::{
 };
 use gstreamer::prelude::*;
 
-include!("../target/idl/video_dds.rs");
+include!(concat!(env!("OUT_DIR"), "/idl/video_dds.rs"));
 
 #[derive(Debug)]
 struct Error(String);
