@@ -178,7 +178,7 @@ pub unsafe extern "C" fn gst_android_get_application_class_loader() -> jni::sys:
 ///
 /// Must use ndk
 #[no_mangle]
-pub unsafe extern "C" fn Java_tw_mapacode_androidsink_SurfaceHolderCallback_nativeSurfaceInit(
+pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfaceInit(
     env: JNIEnv,
     _: JClass,
     surface: jni::sys::jobject,
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn Java_tw_mapacode_androidsink_SurfaceHolderCallback_nati
 ///
 /// Must use ndk
 #[no_mangle]
-pub unsafe extern "C" fn Java_tw_mapacode_androidsink_SurfaceHolderCallback_nativeSurfaceFinalize(
+pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfaceFinalize(
     env: JNIEnv,
     _: JClass,
     surface: jni::sys::jobject,
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     _: JClass,
     context: JObject,
 ) {
-    // Store context and class cloader.
+    // Store class loader
     match env.call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[]) {
         Ok(loader) => match loader {
             JValueGen::Object(obj) => {
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
 ///
 /// Must use globals
 #[no_mangle]
-unsafe extern "C" fn Java_tw_mapacode_androidsink_MainActivity_nativeRun(_env: JNIEnv, _: JClass) {
+unsafe extern "C" fn Java_com_s2e_1systems_MainActivity_nativeRun(_env: JNIEnv, _: JClass) {
     if MY_VIDEO_PIPELINE.as_ref().is_none() {
         MY_VIDEO_PIPELINE = create_pipeline().ok();
         std::thread::spawn(move || match MY_VIDEO_PIPELINE.as_ref() {

@@ -2,12 +2,24 @@ apply plugin: 'com.android.application'
 apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.apache.tools.ant.filters.ReplaceTokens
+
+tasks.register('configure_gstreamer_java', Copy) {
+    // Note: all architectures are the same
+    from "${System.env.GSTREAMER_1_0_ROOT_ANDROID}/x86/share/gst-android/ndk-build/"
+    include 'GStreamer.java'
+    include 'androidmedia/GstAhcCallback.java'
+    include 'androidmedia/GstAhsCallback.java'
+    include 'androidmedia/GstAmcOnFrameAvailableListener.java'
+    into layout.buildDirectory.dir('from-gst-android/org/freedesktop/gstreamer')
+    filter(ReplaceTokens, tokens: [INCLUDE_CA_CERTIFICATES: '//', INCLUDE_FONTS: '//', INCLUDE_COPY_FILE: '//'])
+}
 
 android {
     compileSdk 34
     ndkVersion "26.3.11579264"
     defaultConfig {
-        applicationId "tw.mapacode.androidsink"
+        applicationId "com.s2e_systems.voda"
         minSdkVersion 28
         versionCode 1
         versionName "1.0"
@@ -19,18 +31,18 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
     buildFeatures {
         viewBinding = true
     }
-    namespace 'tw.mapacode.androidsink'
+    sourceSets.main.java.srcDirs += layout.buildDirectory.dir('from-gst-android')
+    namespace 'com.s2e_systems.voda'
 }
 
 
 cargo {
     apiLevel = 34
     module  = "."
-    libname = "androidsink"
+    libname = "voda"
     targets = ["arm", "x86", "arm64", "x86_64"]
     verbose = true
     prebuiltToolchains = true
@@ -88,5 +100,6 @@ cargo {
 
 dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    preBuild.dependsOn "cargoBuild"
+    preBuild.dependsOn 'cargoBuild'
+    preBuild.dependsOn configure_gstreamer_java
 }

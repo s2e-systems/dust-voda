@@ -1,4 +1,4 @@
-package tw.mapacode.androidsink;
+package com.s2e_systems;
 
 import android.app.Activity;
 import android.util.Log;
@@ -7,13 +7,9 @@ import android.widget.Toast;
 import android.os.Bundle;
 import android.content.res.Configuration;
 import androidx.annotation.NonNull;
-import android.content.Context;
-import android.widget.Toast;
 import android.system.Os;
-import android.util.Log;
-import android.view.SurfaceHolder;
 import org.freedesktop.gstreamer.GStreamer;
-import tw.mapacode.androidsink.databinding.ActivityMainBinding;
+import com.s2e_systems.voda.databinding.ActivityMainBinding;
 
 class SurfaceHolderCallback implements SurfaceHolder.Callback {
     private static native void nativeSurfaceInit(Object surface);
@@ -25,7 +21,7 @@ class SurfaceHolderCallback implements SurfaceHolder.Callback {
         nativeSurfaceInit(holder.getSurface());
     }
 
-    public void surfaceCreated(SurfaceHolder holder) {}
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {}
 
     public void surfaceDestroyed(SurfaceHolder holder) {
         nativeSurfaceFinalize(holder.getSurface());
@@ -33,10 +29,10 @@ class SurfaceHolderCallback implements SurfaceHolder.Callback {
 }
 
 public class MainActivity extends Activity {
-    private static native long getVideoOverlay();
-    private ActivityMainBinding binding;
+    //private static native long getVideoOverlay();
+
     static {
-        System.loadLibrary("androidsink");
+        System.loadLibrary("voda");
     }
     private static native void nativeRun();
 
@@ -45,7 +41,7 @@ public class MainActivity extends Activity {
         super.onConfigurationChanged(newConfig);
         Log.i("VoDA", "onConfigurationChanged");
 
-        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        com.s2e_systems.voda.databinding.ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         binding.surfaceVideo.getHolder().addCallback(new SurfaceHolderCallback());
     }
