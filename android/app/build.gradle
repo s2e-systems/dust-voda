@@ -19,7 +19,7 @@ android {
     compileSdk 34
     ndkVersion "26.3.11579264"
     defaultConfig {
-        applicationId "com.s2e_systems.voda"
+        applicationId "com.s2e_systems.publisher"
         minSdkVersion 28
         versionCode 1
         versionName "1.0"
@@ -35,7 +35,7 @@ android {
         viewBinding = true
     }
     sourceSets.main.java.srcDirs += layout.buildDirectory.dir('from-gst-android')
-    namespace 'com.s2e_systems.voda'
+    namespace 'com.s2e_systems.publisher'
 }
 
 
