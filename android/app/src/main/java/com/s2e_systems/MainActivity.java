@@ -9,7 +9,7 @@ import android.content.res.Configuration;
 import androidx.annotation.NonNull;
 import android.system.Os;
 import org.freedesktop.gstreamer.GStreamer;
-import com.s2e_systems.voda.databinding.ActivityMainBinding;
+import com.s2e_systems.databinding.ActivityMainBinding;
 
 class SurfaceHolderCallback implements SurfaceHolder.Callback {
     private static native void nativeSurfaceInit(Object surface);
@@ -29,8 +29,6 @@ class SurfaceHolderCallback implements SurfaceHolder.Callback {
 }
 
 public class MainActivity extends Activity {
-    //private static native long getVideoOverlay();
-
     static {
         System.loadLibrary("voda");
     }
@@ -39,9 +37,7 @@ public class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        Log.i("VoDA", "onConfigurationChanged");
-
-        com.s2e_systems.voda.databinding.ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
+        com.s2e_systems.databinding.ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         binding.surfaceVideo.getHolder().addCallback(new SurfaceHolderCallback());
     }

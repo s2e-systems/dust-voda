@@ -1,3 +1,7 @@
+plugins {
+    id "org.mozilla.rust-android-gradle.rust-android" version "0.9.4"
+}
+
 apply plugin: 'com.android.application'
 apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 
@@ -5,7 +9,7 @@ import org.apache.tools.ant.taskdefs.condition.Os
 import org.apache.tools.ant.filters.ReplaceTokens
 
 tasks.register('configure_gstreamer_java', Copy) {
-    // Note: all architectures are the same
+    // Note: all architectures have the same java template files
     from "${System.env.GSTREAMER_1_0_ROOT_ANDROID}/x86/share/gst-android/ndk-build/"
     include 'GStreamer.java'
     include 'androidmedia/GstAhcCallback.java'
@@ -35,7 +39,7 @@ android {
         viewBinding = true
     }
     sourceSets.main.java.srcDirs += layout.buildDirectory.dir('from-gst-android')
-    namespace 'com.s2e_systems.publisher'
+    namespace 'com.s2e_systems'
 }
 
 
@@ -46,7 +50,6 @@ cargo {
     targets = ["arm", "x86", "arm64", "x86_64"]
     verbose = true
     prebuiltToolchains = true
-    targetDirectory = "../target"
     exec { spec, toolchain ->
         // Host tag as described in https://developer.android.com/ndk/guides/other_build_systems
         String host_tag = ""
