@@ -1,13 +1,9 @@
 /target
 Cargo.lock
 *.so
-/examples/sink/.gradle
-/examples/sink/.idea
-/examples/sink/build
-/examples/sink/app/build
-/examples/sink/local.properties
 /.vscode/settings.json
 /.cargo/config.toml
-app/target
+publisher/target
+publisher/build
 .idea
 .gradle
