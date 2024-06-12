@@ -1,9 +1,8 @@
-extern crate gstreamer;
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::{qos::QosKind, status::NO_STATUS},
 };
-use gstreamer::{prelude::*, DebugCategory, DebugLevel, DebugMessage};
+use gstreamer::{self, prelude::*, DebugCategory, DebugLevel, DebugMessage};
 use gstreamer_video_sys::GstVideoOverlay;
 use jni::{
     objects::{GlobalRef, JClass, JObject, JValueGen},
@@ -11,27 +10,8 @@ use jni::{
     JNIEnv, JavaVM,
 };
 use ndk_sys::android_LogPriority;
-use std::{ffi::CString, fmt::Display};
+use std::ffi::CString;
 
-#[derive(Debug)]
-struct ErrorMessage {
-    src: String,
-    error: String,
-    debug: Option<String>,
-    source: glib::Error,
-}
-impl Display for ErrorMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "src: {}, error: {}, debug: {}, orig error: {}",
-            self.src,
-            self.error,
-            self.debug.as_ref().unwrap_or(&"".to_string()),
-            self.source
-        )
-    }
-}
 struct VodaError(String);
 
 impl std::fmt::Display for VodaError {
@@ -45,22 +25,34 @@ impl From<glib::Error> for VodaError {
         VodaError(value.to_string())
     }
 }
+
 impl From<gstreamer::StateChangeError> for VodaError {
     fn from(value: gstreamer::StateChangeError) -> Self {
         VodaError(value.to_string())
     }
 }
-impl From<ErrorMessage> for VodaError {
-    fn from(value: ErrorMessage) -> Self {
-        VodaError(value.to_string())
+
+impl From<&gstreamer::message::Error> for VodaError {
+    fn from(err: &gstreamer::message::Error) -> Self {
+        Self(format!(
+            "error: {}, debug: {:?}",
+            err.error(),
+            err.debug().map(|s| s.to_string())
+        ))
+    }
+}
+
+impl From<dust_dds::infrastructure::error::DdsError> for VodaError {
+    fn from(value: dust_dds::infrastructure::error::DdsError) -> Self {
+        VodaError(format!("DdsError: {:?}", value))
     }
 }
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-pub struct Video {
+pub struct Video<'a> {
     pub user_id: i16,
     pub frame_num: i32,
-    pub frame: Vec<u8>,
+    pub frame: &'a [u8],
 }
 
 static mut JAVA_VM: Option<JavaVM> = None;
@@ -101,7 +93,7 @@ fn glib_log_handler(domain: Option<&str>, level: glib::LogLevel, msg: &str) {
     android_log_write(prio, &tag, msg);
 }
 
-fn debug_logcat(
+fn gstreamer_log_function(
     category: DebugCategory,
     level: DebugLevel,
     file: &gstreamer::glib::GStr,
@@ -150,9 +142,10 @@ fn debug_logcat(
     }
 }
 
+/// This functions is searched by name by the androidmedia plugin. It must hence be present
+/// even if it appears to be unused
 /// # Safety
-///
-/// Must use globals
+/// Must use global JAVA_VM
 #[no_mangle]
 pub unsafe extern "C" fn gst_android_get_java_vm() -> *const jni::sys::JavaVM {
     match JAVA_VM.as_ref() {
@@ -164,8 +157,7 @@ pub unsafe extern "C" fn gst_android_get_java_vm() -> *const jni::sys::JavaVM {
 /// This functions is searched by name by the androidmedia plugin. It must hence be present
 /// even if it appears to be unused
 /// # Safety
-///
-/// Must use globals
+/// Must use global CLASS_LOADER
 #[no_mangle]
 pub unsafe extern "C" fn gst_android_get_application_class_loader() -> jni::sys::jobject {
     match CLASS_LOADER.as_ref() {
@@ -174,9 +166,9 @@ pub unsafe extern "C" fn gst_android_get_application_class_loader() -> jni::sys:
     }
 }
 
+/// Sets the surface to the GStreamer video system
 /// # Safety
-///
-/// Must use ndk
+/// Must use the ndk and the global instance of the gstreamer pipeline
 #[no_mangle]
 pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfaceInit(
     env: JNIEnv,
@@ -202,9 +194,9 @@ pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfa
     }
 }
 
+/// Releases the surface
 /// # Safety
-///
-/// Must use ndk
+/// Must use the NDK
 #[no_mangle]
 pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfaceFinalize(
     env: JNIEnv,
@@ -214,9 +206,9 @@ pub unsafe extern "C" fn Java_com_s2e_1systems_SurfaceHolderCallback_nativeSurfa
     ndk_sys::ANativeWindow_release(ndk_sys::ANativeWindow_fromSurface(env.get_raw(), surface));
 }
 
+/// Stores the Java class loader, adds log handlers to glib and GStreamer, initializes GStreamer and registers GStreamer plugins
 /// # Safety
-///
-/// Must use globals
+/// Must instantiate CLASS_LOADER global and make use of the NDK
 #[no_mangle]
 pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     mut env: JNIEnv,
@@ -272,7 +264,7 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     gstreamer::log::set_active(true);
     gstreamer::log::set_default_threshold(gstreamer::DebugLevel::Warning);
     gstreamer::log::remove_default_log_function();
-    gstreamer::log::add_log_function(debug_logcat);
+    gstreamer::log::add_log_function(gstreamer_log_function);
 
     match gstreamer::init() {
         Ok(_) => { /* Do nothing. */ }
@@ -301,8 +293,6 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     }
 
     extern "C" {
-        fn gst_plugin_videotestsrc_register();
-        fn gst_plugin_autodetect_register();
         fn gst_plugin_opengl_register();
         fn gst_plugin_app_register();
         fn gst_plugin_coreelements_register();
@@ -311,8 +301,6 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
         fn gst_plugin_androidmedia_register();
     }
 
-    gst_plugin_videotestsrc_register();
-    gst_plugin_autodetect_register();
     gst_plugin_opengl_register();
     gst_plugin_app_register();
     gst_plugin_coreelements_register();
@@ -321,9 +309,9 @@ pub unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     gst_plugin_androidmedia_register();
 }
 
+/// Creates the GStreamer pipeline and stores it as a global
 /// # Safety
-///
-/// Must use globals
+/// Must initialize the global GStreamer pipeline
 #[no_mangle]
 unsafe extern "C" fn Java_com_s2e_1systems_MainActivity_nativeRun(_env: JNIEnv, _: JClass) {
     if MY_VIDEO_PIPELINE.as_ref().is_none() {
@@ -346,9 +334,9 @@ unsafe extern "C" fn Java_com_s2e_1systems_MainActivity_nativeRun(_env: JNIEnv, 
     }
 }
 
+/// Store Java VM
 /// # Safety
-///
-/// Must store JAVA_VM
+/// Must use global JAVA_VM
 #[no_mangle]
 #[allow(non_snake_case)]
 unsafe fn JNI_OnLoad(jvm: JavaVM, _reserved: *mut std::os::raw::c_void) -> jint {
@@ -394,7 +382,7 @@ unsafe fn JNI_OnLoad(jvm: JavaVM, _reserved: *mut std::os::raw::c_void) -> jint 
                 android_LogPriority::ANDROID_LOG_ERROR,
                 "VoDA",
                 &format!(
-                    "Could not retreive class org.freedesktop.gstreamer.GStreamer, error: {}",
+                    "Could not find class org.freedesktop.gstreamer.GStreamer, error: {}",
                     e
                 ),
             );
@@ -408,28 +396,22 @@ unsafe fn JNI_OnLoad(jvm: JavaVM, _reserved: *mut std::os::raw::c_void) -> jint 
 fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let pipeline_element = gstreamer::parse::launch("ahcsrc ! video/x-raw,format=NV21,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! glimagesink t. ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink")?;
 
-    let participant = DomainParticipantFactory::get_instance()
-        .create_participant(0, QosKind::Default, None, NO_STATUS)
-        .unwrap();
-
-    let topic = participant
-        .create_topic::<Video>(
-            "VideoStream",
-            "VideoStream",
-            QosKind::Default,
-            None,
-            NO_STATUS,
-        )
-        .unwrap();
-
-    let publisher = participant
-        .create_publisher(QosKind::Default, None, NO_STATUS)
-        .unwrap();
-
+    let participant = DomainParticipantFactory::get_instance().create_participant(
+        0,
+        QosKind::Default,
+        None,
+        NO_STATUS,
+    )?;
+    let topic = participant.create_topic::<Video>(
+        "VideoStream",
+        "VideoStream",
+        QosKind::Default,
+        None,
+        NO_STATUS,
+    )?;
+    let publisher = participant.create_publisher(QosKind::Default, None, NO_STATUS)?;
     let writer = publisher
-        .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)
-        .unwrap();
-
+        .create_datawriter(&topic, QosKind::Default, None, NO_STATUS)?;
     let pipeline = pipeline_element
         .dynamic_cast::<gstreamer::Pipeline>()
         .expect("Pipeline is expected to be a bin");
@@ -445,16 +427,16 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
         gstreamer_app::AppSinkCallbacks::builder()
             .new_sample(move |s| {
                 if let Ok(sample) = s.pull_sample() {
-                    let b = sample.buffer().unwrap().map_readable().unwrap();
-                    let bytes = b.as_slice();
-
+                    let buffer_map = sample.buffer().unwrap().map_readable().unwrap();
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: bytes.to_vec(),
+                        frame: buffer_map.as_slice(),
                     };
-                    writer.write(&video_sample, None).unwrap();
                     i += 1;
+                    if writer.write(&video_sample, None).is_err() {
+                        return Err(gstreamer::FlowError::Error);
+                    };
                 }
                 Ok(gstreamer::FlowSuccess::Ok)
             })
@@ -476,16 +458,7 @@ fn main_loop(pipeline: &gstreamer::Pipeline) -> Result<(), VodaError> {
             gstreamer::MessageView::Eos(..) => break,
             gstreamer::MessageView::Error(err) => {
                 pipeline.set_state(gstreamer::State::Null)?;
-                return Err(ErrorMessage {
-                    src: msg
-                        .src()
-                        .map(|s| String::from(s.path_string()))
-                        .unwrap_or_else(|| String::from("None")),
-                    error: err.error().to_string(),
-                    debug: err.debug().map(|s| s.to_string()),
-                    source: err.error(),
-                }
-                .into());
+                Err(err)?;
             }
             _ => (),
         }
