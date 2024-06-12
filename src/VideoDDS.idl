@@ -1,6 +1,0 @@
-struct Video
-{
-	short user_id;
-	long frame_num;
-	sequence <octet> frame;
-};

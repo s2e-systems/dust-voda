@@ -5,5 +5,7 @@ Cargo.lock
 /.cargo/config.toml
 publisher/target
 publisher/build
+subscriber/target
+subscriber/build
 .idea
 .gradle

@@ -4,7 +4,12 @@ use dust_dds::{
 };
 use gstreamer::prelude::*;
 
-include!(concat!(env!("OUT_DIR"), "/idl/video_dds.rs"));
+#[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
+struct Video<'a> {
+    user_id: i16,
+    frame_num: i32,
+    frame: &'a [u8],
+}
 #[derive(Debug)]
 struct Error(String);
 impl std::fmt::Display for Error {
@@ -38,12 +43,6 @@ fn main() -> Result<(), Error> {
 
     let domain_id = 0;
     let participant_factory = DomainParticipantFactory::get_instance();
-    participant_factory.set_configuration(
-        dust_dds::configuration::DustDdsConfigurationBuilder::new()
-            .fragment_size(60000)
-            .udp_receive_buffer_size(Some(60000 * 46))
-            .build()?,
-    )?;
     let participant =
         participant_factory.create_participant(domain_id, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
@@ -56,7 +55,7 @@ fn main() -> Result<(), Error> {
     let publisher = participant.create_publisher(QosKind::Default, None, NO_STATUS)?;
     let writer = publisher.create_datawriter(&topic, QosKind::Default, None, NO_STATUS)?;
 
-    let pipeline = gstreamer::parse_launch(
+    let pipeline = gstreamer::parse::launch(
         r#"autovideosrc ! video/x-raw,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink  t. ! queue leaky=2 ! taginject tags="title=Publisher" ! autovideosink"#,
     )?;
 
@@ -65,27 +64,26 @@ fn main() -> Result<(), Error> {
     let bin = pipeline
         .downcast_ref::<gstreamer::Bin>()
         .expect("Pipeline must be bin");
-    let appsink_element = bin.by_name("appsink").expect("Pipeline must have appsink");
+    let appsink_element = bin.by_name("appsink").expect("appsink in pipeline");
     let appsink = appsink_element
         .downcast_ref::<gstreamer_app::AppSink>()
-        .expect("appsink must be an AppSink");
+        .expect("type AppSink");
 
     let mut i = 0;
     appsink.set_callbacks(
         gstreamer_app::AppSinkCallbacks::builder()
             .new_sample(move |s| {
                 if let Ok(sample) = s.pull_sample() {
-                    let b = sample
+                    let bytes = sample
                         .buffer()
-                        .expect("buffer does not exists")
+                        .expect("buffer exists")
                         .map_readable()
-                        .expect("buffer not readable");
-                    let bytes = b.as_slice();
+                        .expect("readable buffer");
 
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: bytes.to_vec(),
+                        frame: bytes.as_slice(),
                     };
                     writer
                         .write(&video_sample, None)
@@ -103,7 +101,7 @@ fn main() -> Result<(), Error> {
     );
 
     // Wait until error or EOS
-    let bus = pipeline.bus().expect("pipeline must have bus");
+    let bus = pipeline.bus().expect("pipeline has bus");
     for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
         match msg.view() {
             gstreamer::MessageView::Eos(..) => break,

@@ -12,7 +12,12 @@ use dust_dds::{
 };
 use gstreamer::prelude::*;
 
-include!(concat!(env!("OUT_DIR"), "/idl/video_dds.rs"));
+#[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
+struct Video<'a> {
+    user_id: i16,
+    frame_num: i32,
+    frame: &'a [u8],
+}
 
 #[derive(Debug)]
 struct Error(String);
@@ -46,8 +51,8 @@ struct Listener {
     appsrc: gstreamer_app::AppSrc,
 }
 
-impl DataReaderListener for Listener {
-    type Foo = Video;
+impl<'a> DataReaderListener<'a> for Listener {
+    type Foo = Video<'a>;
 
     fn on_data_available(
         &mut self,
@@ -63,14 +68,14 @@ impl DataReaderListener for Listener {
                     let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len())
                         .expect("buffer creation failed");
                     {
-                        let buffer_ref = buffer.get_mut().expect("Buffer not writable");
+                        let buffer_ref = buffer.get_mut().expect("mutable buffer");
                         let mut buffer_samples =
-                            buffer_ref.map_writable().expect("Buffer not mappable");
-                        buffer_samples.clone_from_slice(sample_data.frame.as_slice());
+                            buffer_ref.map_writable().expect("writeable buffer");
+                        buffer_samples.clone_from_slice(sample_data.frame);
                     }
                     self.appsrc
                         .push_buffer(buffer)
-                        .expect("Failed pushing buffer into appsrc");
+                        .expect("push buffer into appsrc to succeed");
 
                     use std::io::{self, Write};
                     io::stdout().flush().ok();
@@ -96,15 +101,15 @@ fn main() -> Result<(), Error> {
     )?;
     let subscriber = participant.create_subscriber(QosKind::Default, None, NO_STATUS)?;
 
-    let pipeline = gstreamer::parse_launch(
+    let pipeline = gstreamer::parse::launch(
         r#"appsrc name=appsrc ! openh264dec ! videoconvert ! taginject tags="title=Subscriber" ! autovideosink"#,
     )?;
 
     pipeline.set_state(gstreamer::State::Playing)?;
 
-    let bin = pipeline.downcast_ref::<gstreamer::Bin>().expect("Pipeline must be bin");
-    let appsrc_element = bin.by_name("appsrc").expect("Pipeline must have appsrc");
-    let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().expect("appsrc must be an AppSrc");
+    let bin = pipeline.downcast_ref::<gstreamer::Bin>().expect("Pipeline is bin");
+    let appsrc_element = bin.by_name("appsrc").expect("Pipeline has appsrc");
+    let appsrc = appsrc_element.downcast::<gstreamer_app::AppSrc>().expect("is AppSrc type");
     let src_caps = gstreamer::Caps::builder("video/x-h264")
         .field("stream-format", "byte-stream")
         .field("alignment", "au")
@@ -120,7 +125,7 @@ fn main() -> Result<(), Error> {
     )?;
 
     // Wait until error or EOS
-    let bus = pipeline.bus().expect("Pipeline must have bus");
+    let bus = pipeline.bus().expect("Pipeline has bus");
     for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
         match msg.view() {
             gstreamer::MessageView::Eos(..) => break,
