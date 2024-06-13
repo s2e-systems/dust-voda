@@ -56,10 +56,10 @@ impl From<dust_dds::infrastructure::error::DdsError> for VodaError {
 }
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video<'a> {
+struct Video {
     user_id: i16,
     frame_num: i32,
-    frame: &'a [u8],
+    frame: Vec<u8>,
 }
 
 static mut JAVA_VM: Option<JavaVM> = None;
@@ -347,8 +347,8 @@ struct Listener {
     appsrc: gstreamer_app::AppSrc,
 }
 
-impl<'a> DataReaderListener<'a> for Listener {
-    type Foo = Video<'a>;
+impl DataReaderListener for Listener {
+    type Foo = Video;
 
     fn on_data_available(
         &mut self,
@@ -371,7 +371,7 @@ impl<'a> DataReaderListener<'a> for Listener {
                         let buffer_ref = buffer.get_mut().expect("mutable buffer");
                         let mut buffer_samples =
                             buffer_ref.map_writable().expect("writeable buffer");
-                        buffer_samples.clone_from_slice(sample_data.frame);
+                        buffer_samples.clone_from_slice(sample_data.frame.as_slice());
                     }
                     self.appsrc
                         .push_buffer(buffer)

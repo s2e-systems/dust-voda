@@ -5,10 +5,10 @@ use dust_dds::{
 use gstreamer::prelude::*;
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video<'a> {
+struct Video {
     user_id: i16,
     frame_num: i32,
-    frame: &'a [u8],
+    frame: Vec<u8>,
 }
 #[derive(Debug)]
 struct Error(String);
@@ -83,7 +83,7 @@ fn main() -> Result<(), Error> {
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: bytes.as_slice(),
+                        frame: bytes.to_vec(),
                     };
                     writer
                         .write(&video_sample, None)

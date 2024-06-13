@@ -49,10 +49,10 @@ impl From<dust_dds::infrastructure::error::DdsError> for VodaError {
 }
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video<'a> {
+struct Video {
     user_id: i16,
     frame_num: i32,
-    frame: &'a [u8],
+    frame: Vec<u8>,
 }
 
 static mut JAVA_VM: Option<JavaVM> = None;
@@ -373,7 +373,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: buffer_map.as_slice(),
+                        frame: buffer_map.to_vec(),
                     };
                     i += 1;
                     if writer.write(&video_sample, None).is_err() {
