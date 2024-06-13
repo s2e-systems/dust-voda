@@ -30,12 +30,6 @@ android {
     }
     layout.buildDirectory = new File(rootProject.projectDir, "/build/gradle/" + project.name)
 
-    buildTypes {
-        release {
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
     buildFeatures {
         viewBinding = true
     }

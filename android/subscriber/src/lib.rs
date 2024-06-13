@@ -1,20 +1,13 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::{
-        qos::DataReaderQos,
         qos::QosKind,
-        qos_policy::{
-            ReliabilityQosPolicy,
-            ReliabilityQosPolicyKind,
-        },
         status::{StatusKind, NO_STATUS},
-        time::{Duration, DurationKind},
     },
     subscription::{
         data_reader_listener::DataReaderListener,
         sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
     },
-    configuration::{DustDdsConfiguration, DustDdsConfigurationBuilder},
 };
 use gstreamer::{self, prelude::*, DebugCategory, DebugLevel, DebugMessage};
 use gstreamer_video_sys::GstVideoOverlay;
@@ -419,7 +412,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let subscriber = participant.create_subscriber(QosKind::Default, None, NO_STATUS)?;
     let _reader = subscriber.create_datareader::<Video>(
         &topic,
-        QosKind::Specific(reader_qos),
+        QosKind::Default,
         Some(Box::new(Listener { appsrc })),
         &[StatusKind::DataAvailable],
     )?;
