@@ -1,6 +1,14 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
-    infrastructure::{qos::QosKind, status::NO_STATUS},
+    infrastructure::{
+        qos::QosKind,
+        status::{StatusKind, NO_STATUS},
+        time::Duration,
+    },
+    subscription::{
+        data_reader_listener::DataReaderListener,
+        sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
+    },
 };
 use gstreamer::{self, prelude::*, DebugCategory, DebugLevel, DebugMessage};
 use gstreamer_video_sys::GstVideoOverlay;
@@ -296,17 +304,17 @@ unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
         fn gst_plugin_opengl_register();
         fn gst_plugin_app_register();
         fn gst_plugin_coreelements_register();
-        fn gst_plugin_openh264_register();
         fn gst_plugin_videoconvertscale_register();
         fn gst_plugin_androidmedia_register();
+        fn gst_plugin_libav_register();
     }
 
     gst_plugin_opengl_register();
     gst_plugin_app_register();
     gst_plugin_coreelements_register();
-    gst_plugin_openh264_register();
     gst_plugin_videoconvertscale_register();
     gst_plugin_androidmedia_register();
+    gst_plugin_libav_register();
 }
 
 /// Creates the GStreamer pipeline and stores it as a global
@@ -336,15 +344,65 @@ unsafe extern "C" fn Java_com_s2e_1systems_MainActivity_nativeRun(_env: JNIEnv, 
     };
 }
 
-fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
-    let pipeline_element = gstreamer::parse::launch("ahcsrc ! video/x-raw,format=NV21,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! glimagesink t. ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink")?;
+struct Listener {
+    appsrc: gstreamer_app::AppSrc,
+}
 
-    let participant = DomainParticipantFactory::get_instance().create_participant(
-        0,
-        QosKind::Default,
-        None,
-        NO_STATUS,
+impl<'a> DataReaderListener<'a> for Listener {
+    type Foo = Video<'a>;
+
+    fn on_data_available(
+        &mut self,
+        the_reader: dust_dds::subscription::data_reader::DataReader<Self::Foo>,
+    ) {
+        if let Ok(samples) =
+            the_reader.read(1, ANY_SAMPLE_STATE, ANY_VIEW_STATE, ANY_INSTANCE_STATE)
+        {
+            for sample in samples {
+                if let Ok(sample_data) = sample.data() {
+                    android_log_write(
+                        android_LogPriority::ANDROID_LOG_INFO,
+                        "VoDA",
+                        &format!("sample received: {:?}", sample_data.frame_num),
+                    );
+
+                    let mut buffer = gstreamer::Buffer::with_size(sample_data.frame.len())
+                        .expect("buffer creation failed");
+                    {
+                        let buffer_ref = buffer.get_mut().expect("mutable buffer");
+                        let mut buffer_samples =
+                            buffer_ref.map_writable().expect("writeable buffer");
+                        buffer_samples.clone_from_slice(sample_data.frame);
+                    }
+                    self.appsrc
+                        .push_buffer(buffer)
+                        .expect("push buffer into appsrc succeeds");
+                }
+            }
+        }
+    }
+}
+
+fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
+    let pipeline_element = gstreamer::parse::launch(
+        "appsrc name=app_src ! avdec_h264 ! videoconvert ! glimagesink sync=false",
     )?;
+    let bin = pipeline_element
+        .downcast_ref::<gstreamer::Bin>()
+        .expect("Pipeline is bin");
+    let appsrc_element = bin.by_name("app_src").expect("Pipeline has appsrc");
+    let appsrc = appsrc_element
+        .downcast::<gstreamer_app::AppSrc>()
+        .expect("is AppSrc type");
+    let src_caps = gstreamer::Caps::builder("video/x-h264")
+        .field("stream-format", "byte-stream")
+        .field("alignment", "au")
+        .field("profile", "constrained-baseline")
+        .build();
+    appsrc.set_caps(Some(&src_caps));
+
+    let factory = DomainParticipantFactory::get_instance();
+    let participant = factory.create_participant(0, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
         "VideoStream",
         "VideoStream",
@@ -352,49 +410,23 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
         None,
         NO_STATUS,
     )?;
-    let publisher = participant.create_publisher(QosKind::Default, None, NO_STATUS)?;
-    let writer = publisher.create_datawriter(&topic, QosKind::Default, None, NO_STATUS)?;
+    let subscriber = participant.create_subscriber(QosKind::Default, None, NO_STATUS)?;
+    let _reader = subscriber.create_datareader::<Video>(
+        &topic,
+        QosKind::Default,
+        Some(Box::new(Listener { appsrc })),
+        &[StatusKind::DataAvailable],
+    )?;
+
     let pipeline = pipeline_element
         .dynamic_cast::<gstreamer::Pipeline>()
-        .expect("Pipeline is expected to be a bin");
-    let sink = pipeline
-        .by_name("appsink")
-        .ok_or(VodaError("appsink missing".to_string()))?;
-    let appsink = sink
-        .dynamic_cast::<gstreamer_app::AppSink>()
-        .expect("Sink element is expected to be an appsink!");
-
-    let mut i = 0;
-    appsink.set_callbacks(
-        gstreamer_app::AppSinkCallbacks::builder()
-            .new_sample(move |s| {
-                if let Ok(sample) = s.pull_sample() {
-                    let buffer_map = sample.buffer().unwrap().map_readable().unwrap();
-                    let video_sample = Video {
-                        user_id: 8,
-                        frame_num: i,
-                        frame: buffer_map.as_slice(),
-                    };
-                    i += 1;
-                    if writer.write(&video_sample, None).is_err() {
-                        return Err(gstreamer::FlowError::Error);
-                    };
-                }
-                Ok(gstreamer::FlowSuccess::Ok)
-            })
-            .build(),
-    );
-
+        .expect("Pipeline is a bin");
     Ok(pipeline)
 }
 
 fn main_loop(pipeline: &gstreamer::Pipeline) -> Result<(), VodaError> {
     pipeline.set_state(gstreamer::State::Playing)?;
-
-    let bus = pipeline
-        .bus()
-        .expect("Pipeline without bus. Shouldn't happen!");
-
+    let bus = pipeline.bus().expect("Pipeline has bus");
     for msg in bus.iter_timed(gstreamer::ClockTime::NONE) {
         match msg.view() {
             gstreamer::MessageView::Eos(..) => break,

@@ -24,7 +24,7 @@ class SurfaceHolderCallback implements SurfaceHolder.Callback {
     public void surfaceCreated(@NonNull SurfaceHolder holder) {}
 
     public void surfaceDestroyed(SurfaceHolder holder) {
-        nativeSurfaceFinalize(holder.getSurface());
+       nativeSurfaceFinalize(holder.getSurface());
     }
 }
 

@@ -21,7 +21,7 @@ tasks.register('configure_gstreamer_java', Copy) {
 
 android {
     compileSdk 34
-    ndkVersion "26.3.11579264"
+    ndkVersion "25.2.9519653" //r25c
     defaultConfig {
         applicationId "com.s2e_systems.publisher"
         minSdkVersion 28
@@ -45,8 +45,7 @@ android {
 
 
 cargo {
-    apiLevel = 34
-    module  = "."
+    module = "."
     libname = "voda"
     targets = ["arm", "x86", "arm64", "x86_64"]
     verbose = true
@@ -83,11 +82,12 @@ cargo {
         def gstreamer_android_root_path = System.getenv('GSTREAMER_1_0_ROOT_ANDROID')
 
         def rustflag_list = [""]
-        rustflag_list.add("-L$android.ndkDirectory.absolutePath/toolchains/llvm/prebuilt/$host_tag/lib/clang/17.0.2/lib/linux")
+        rustflag_list.add("-L$android.ndkDirectory.absolutePath/toolchains/llvm/prebuilt/$host_tag/lib64/clang/14.0.7/lib/linux")
+        rustflag_list.add("-lEGL")
         rustflag_list.add("-L$gstreamer_android_root_path/$gstreamer_architecture/lib/gstreamer-1.0")
         rustflag_list.add("-lclang_rt.builtins-$clang_architecture-android")
         rustflag_list.add("-lc++abi")
-        rustflag_list.add("-lffi -lEGL -lz")
+        rustflag_list.add("-lffi -lz")
         rustflag_list.add("-liconv -lorc-0.4 -lgmodule-2.0 -lpcre2-8")
         rustflag_list.add("-lgstcoreelements -lgstvideotestsrc -lgstautodetect -lgstvideo-1.0 -lgstapp")
         rustflag_list.add("-lgstopengl -lgstgl-1.0 -lgstcontroller-1.0 -lgraphene-1.0 -ljpeg -lpng16")
