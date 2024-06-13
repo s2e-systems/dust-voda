@@ -1,14 +1,20 @@
 use dust_dds::{
     domain::domain_participant_factory::DomainParticipantFactory,
     infrastructure::{
+        qos::DataReaderQos,
         qos::QosKind,
+        qos_policy::{
+            ReliabilityQosPolicy,
+            ReliabilityQosPolicyKind,
+        },
         status::{StatusKind, NO_STATUS},
-        time::Duration,
+        time::{Duration, DurationKind},
     },
     subscription::{
         data_reader_listener::DataReaderListener,
         sample_info::{ANY_INSTANCE_STATE, ANY_SAMPLE_STATE, ANY_VIEW_STATE},
     },
+    configuration::{DustDdsConfiguration, DustDdsConfigurationBuilder},
 };
 use gstreamer::{self, prelude::*, DebugCategory, DebugLevel, DebugMessage};
 use gstreamer_video_sys::GstVideoOverlay;
@@ -306,7 +312,7 @@ unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
         fn gst_plugin_coreelements_register();
         fn gst_plugin_videoconvertscale_register();
         fn gst_plugin_androidmedia_register();
-        fn gst_plugin_libav_register();
+        fn gst_plugin_openh264_register();
     }
 
     gst_plugin_opengl_register();
@@ -314,7 +320,7 @@ unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     gst_plugin_coreelements_register();
     gst_plugin_videoconvertscale_register();
     gst_plugin_androidmedia_register();
-    gst_plugin_libav_register();
+    gst_plugin_openh264_register();
 }
 
 /// Creates the GStreamer pipeline and stores it as a global
@@ -385,7 +391,7 @@ impl<'a> DataReaderListener<'a> for Listener {
 
 fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let pipeline_element = gstreamer::parse::launch(
-        "appsrc name=app_src ! avdec_h264 ! videoconvert ! glimagesink sync=false",
+        "appsrc name=app_src ! openh264dec ! videoconvert ! glimagesink sync=false",
     )?;
     let bin = pipeline_element
         .downcast_ref::<gstreamer::Bin>()
@@ -413,7 +419,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let subscriber = participant.create_subscriber(QosKind::Default, None, NO_STATUS)?;
     let _reader = subscriber.create_datareader::<Video>(
         &topic,
-        QosKind::Default,
+        QosKind::Specific(reader_qos),
         Some(Box::new(Listener { appsrc })),
         &[StatusKind::DataAvailable],
     )?;
