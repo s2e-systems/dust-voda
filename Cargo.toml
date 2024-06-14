@@ -12,9 +12,7 @@ name = "subscriber"
 path = "src/main_subscriber.rs"
 
 [dependencies]
-dust_dds = { version = "0.9.0", git = "https://github.com/s2e-systems/dust-dds", branch = "main"}
-gstreamer = "0.19.2"
-gstreamer-app = "0.19.2"
+dust_dds = { version = "0.9" }
+gstreamer = "0.22.4"
+gstreamer-app = "0.22.0"
 
-[build-dependencies]
-dust_dds_gen = { version = "0.9.0", git = "https://github.com/s2e-systems/dust-dds", branch = "main"}

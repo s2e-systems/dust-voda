@@ -1,0 +1,3 @@
+include ':publisher'
+include ':subscriber'
+rootProject.name = "VoDA"
