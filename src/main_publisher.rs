@@ -5,10 +5,10 @@ use dust_dds::{
 use gstreamer::prelude::*;
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video {
+struct Video<'a> {
     user_id: i16,
     frame_num: i32,
-    frame: Vec<u8>,
+    frame: &'a [u8],
 }
 #[derive(Debug)]
 struct Error(String);
@@ -47,7 +47,7 @@ fn main() -> Result<(), Error> {
         participant_factory.create_participant(domain_id, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
         "VideoStream",
-        "VideoStream",
+        "Video",
         QosKind::Default,
         None,
         NO_STATUS,
@@ -56,7 +56,7 @@ fn main() -> Result<(), Error> {
     let writer = publisher.create_datawriter(&topic, QosKind::Default, None, NO_STATUS)?;
 
     let pipeline = gstreamer::parse::launch(
-        r#"autovideosrc ! video/x-raw,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink  t. ! queue leaky=2 ! taginject tags="title=Publisher" ! autovideosink"#,
+        r#"autovideosrc ! video/x-raw,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 scene-change-detection=0 background-detection=0 bitrate=1280000 ! appsink name=appsink sync=false t. ! queue leaky=2 ! taginject tags="title=Publisher" ! autovideosink"#,
     )?;
 
     pipeline.set_state(gstreamer::State::Playing)?;
@@ -83,7 +83,7 @@ fn main() -> Result<(), Error> {
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: bytes.to_vec(),
+                        frame: bytes.as_slice(),
                     };
                     writer
                         .write(&video_sample, None)

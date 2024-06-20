@@ -56,10 +56,10 @@ impl From<dust_dds::infrastructure::error::DdsError> for VodaError {
 }
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video {
+struct Video<'a> {
     user_id: i16,
     frame_num: i32,
-    frame: Vec<u8>,
+    frame: &'a [u8],
 }
 
 static mut JAVA_VM: Option<JavaVM> = None;
@@ -302,17 +302,13 @@ unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     extern "C" {
         fn gst_plugin_opengl_register();
         fn gst_plugin_app_register();
-        fn gst_plugin_coreelements_register();
         fn gst_plugin_videoconvertscale_register();
-        fn gst_plugin_androidmedia_register();
         fn gst_plugin_openh264_register();
     }
 
     gst_plugin_opengl_register();
     gst_plugin_app_register();
-    gst_plugin_coreelements_register();
     gst_plugin_videoconvertscale_register();
-    gst_plugin_androidmedia_register();
     gst_plugin_openh264_register();
 }
 
@@ -347,8 +343,8 @@ struct Listener {
     appsrc: gstreamer_app::AppSrc,
 }
 
-impl DataReaderListener for Listener {
-    type Foo = Video;
+impl<'a> DataReaderListener<'a> for Listener {
+    type Foo = Video<'a>;
 
     fn on_data_available(
         &mut self,
@@ -371,7 +367,7 @@ impl DataReaderListener for Listener {
                         let buffer_ref = buffer.get_mut().expect("mutable buffer");
                         let mut buffer_samples =
                             buffer_ref.map_writable().expect("writeable buffer");
-                        buffer_samples.clone_from_slice(sample_data.frame.as_slice());
+                        buffer_samples.clone_from_slice(sample_data.frame);
                     }
                     self.appsrc
                         .push_buffer(buffer)
@@ -404,7 +400,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let participant = factory.create_participant(0, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
         "VideoStream",
-        "VideoStream",
+        "Video",
         QosKind::Default,
         None,
         NO_STATUS,
