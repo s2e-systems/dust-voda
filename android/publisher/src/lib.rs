@@ -369,7 +369,11 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
         gstreamer_app::AppSinkCallbacks::builder()
             .new_sample(move |s| {
                 if let Ok(sample) = s.pull_sample() {
-                    let buffer_map = sample.buffer().unwrap().map_readable().unwrap();
+                    let buffer_map = sample
+                        .buffer()
+                        .expect("buffer exists")
+                        .map_readable()
+                        .expect("readable buffer");
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
