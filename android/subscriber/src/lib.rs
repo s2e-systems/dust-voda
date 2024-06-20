@@ -302,17 +302,13 @@ unsafe extern "C" fn Java_org_freedesktop_gstreamer_GStreamer_nativeInit(
     extern "C" {
         fn gst_plugin_opengl_register();
         fn gst_plugin_app_register();
-        fn gst_plugin_coreelements_register();
         fn gst_plugin_videoconvertscale_register();
-        fn gst_plugin_androidmedia_register();
         fn gst_plugin_openh264_register();
     }
 
     gst_plugin_opengl_register();
     gst_plugin_app_register();
-    gst_plugin_coreelements_register();
     gst_plugin_videoconvertscale_register();
-    gst_plugin_androidmedia_register();
     gst_plugin_openh264_register();
 }
 

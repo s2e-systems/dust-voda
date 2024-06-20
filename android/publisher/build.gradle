@@ -13,8 +13,6 @@ tasks.register('configure_gstreamer_java', Copy) {
     from "${System.env.GSTREAMER_1_0_ROOT_ANDROID}/x86/share/gst-android/ndk-build/"
     include 'GStreamer.java'
     include 'androidmedia/GstAhcCallback.java'
-    include 'androidmedia/GstAhsCallback.java'
-    include 'androidmedia/GstAmcOnFrameAvailableListener.java'
     into layout.buildDirectory.dir('from-gst-android/org/freedesktop/gstreamer')
     filter(ReplaceTokens, tokens: [INCLUDE_CA_CERTIFICATES: '//', INCLUDE_FONTS: '//', INCLUDE_COPY_FILE: '//'])
 }
@@ -83,7 +81,7 @@ cargo {
         rustflag_list.add("-lc++abi")
         rustflag_list.add("-lffi -lz")
         rustflag_list.add("-liconv -lorc-0.4 -lgmodule-2.0 -lpcre2-8")
-        rustflag_list.add("-lgstcoreelements -lgstvideotestsrc -lgstautodetect -lgstvideo-1.0 -lgstapp")
+        rustflag_list.add("-lgstcoreelements -lgstvideo-1.0 -lgstapp")
         rustflag_list.add("-lgstopengl -lgstgl-1.0 -lgstcontroller-1.0 -lgraphene-1.0 -ljpeg -lpng16")
         rustflag_list.add("-lopenh264 -lgstopenh264 -lgstpbutils-1.0 -lgstvideoconvertscale")
         rustflag_list.add("-lgstandroidmedia -lgstaudio-1.0 -lgstphotography-1.0")
