@@ -94,7 +94,7 @@ fn main() -> Result<(), Error> {
         participant_factory.create_participant(domain_id, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
         "VideoStream",
-        "VideoStream",
+        "Video",
         QosKind::Default,
         None,
         NO_STATUS,

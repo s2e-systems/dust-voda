@@ -404,7 +404,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
     let participant = factory.create_participant(0, QosKind::Default, None, NO_STATUS)?;
     let topic = participant.create_topic::<Video>(
         "VideoStream",
-        "VideoStream",
+        "Video",
         QosKind::Default,
         None,
         NO_STATUS,
