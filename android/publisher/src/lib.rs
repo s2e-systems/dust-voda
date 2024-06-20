@@ -49,10 +49,10 @@ impl From<dust_dds::infrastructure::error::DdsError> for VodaError {
 }
 
 #[derive(Debug, dust_dds::topic_definition::type_support::DdsType)]
-struct Video {
+struct Video<'a> {
     user_id: i16,
     frame_num: i32,
-    frame: Vec<u8>,
+    frame: &'a [u8],
 }
 
 static mut JAVA_VM: Option<JavaVM> = None;
@@ -337,7 +337,7 @@ unsafe extern "C" fn Java_com_s2e_1systems_MainActivity_nativeRun(_env: JNIEnv, 
 }
 
 fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
-    let pipeline_element = gstreamer::parse::launch("ahcsrc ! video/x-raw,format=NV21,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! glimagesink t. ! queue leaky=2 ! videoconvert ! openh264enc complexity=0 ! appsink name=appsink")?;
+    let pipeline_element = gstreamer::parse::launch("ahcsrc ! video/x-raw,framerate=[1/1,25/1],width=[1,1280],height=[1,720] ! tee name=t ! queue leaky=2 ! glimagesink t. ! queue leaky=2 max-size-buffers=1 ! videoconvert ! openh264enc complexity=0 scene-change-detection=0 background-detection=0 bitrate=1280000 ! appsink name=appsink max-buffers=1 sync=false")?;
 
     let participant = DomainParticipantFactory::get_instance().create_participant(
         0,
@@ -373,7 +373,7 @@ fn create_pipeline() -> Result<gstreamer::Pipeline, VodaError> {
                     let video_sample = Video {
                         user_id: 8,
                         frame_num: i,
-                        frame: buffer_map.to_vec(),
+                        frame: buffer_map.as_slice(),
                     };
                     i += 1;
                     if writer.write(&video_sample, None).is_err() {
